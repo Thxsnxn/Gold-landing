@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import type { GoldPriceRaw } from "./types";
 
 const GOLD_API_URL = "https://goldtraders.or.th/api/GoldPrices/Latest?readjson=false";
+const THAI_GOLD_API_URL = "https://api.chnwt.dev/thai-gold-api/latest";
 const CLASSIC_GOLD_URL = "https://classic.goldtraders.or.th/";
 
 // ── Selector sets (primary first, fallback second) ──────────────────────
@@ -148,6 +149,35 @@ async function fetchLatestFromApi(): Promise<GoldPriceRaw> {
   };
 }
 
+async function fetchLatestFromThaiGoldApi(): Promise<GoldPriceRaw> {
+  const { data } = await axios.get(THAI_GOLD_API_URL, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0",
+    },
+    timeout: 10_000,
+  });
+
+  if (data?.status !== "success") {
+    throw new Error("Thai gold API returned an unsuccessful status");
+  }
+
+  const buy = parsePrice(String(data?.response?.price?.gold_bar?.buy ?? ""));
+  const sell = parsePrice(String(data?.response?.price?.gold_bar?.sell ?? ""));
+
+  if (!isValidPrice(buy) || !isValidPrice(sell)) {
+    throw new Error("Thai gold API returned invalid prices");
+  }
+
+  return {
+    buy,
+    sell,
+    updatedAt: [data?.response?.update_date, data?.response?.update_time]
+      .filter(Boolean)
+      .join(" "),
+  };
+}
+
 async function scrapeClassicPage(): Promise<GoldPriceRaw> {
   const { data: html } = await axios.get(CLASSIC_GOLD_URL, {
     headers: {
@@ -166,9 +196,17 @@ async function scrapeOnce(): Promise<GoldPriceRaw> {
     return await fetchLatestFromApi();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    log("warn", `Gold API failed, falling back to classic page: ${message}`);
-    return scrapeClassicPage();
+    log("warn", `Gold API failed, falling back to Thai gold API: ${message}`);
   }
+
+  try {
+    return await fetchLatestFromThaiGoldApi();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log("warn", `Thai gold API failed, falling back to classic page: ${message}`);
+  }
+
+  return scrapeClassicPage();
 }
 
 /**
