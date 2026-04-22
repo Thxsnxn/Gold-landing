@@ -2,7 +2,8 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import type { GoldPriceRaw } from "./types";
 
-const GOLD_URL = "https://classic.goldtraders.or.th/";
+const GOLD_API_URL = "https://goldtraders.or.th/api/GoldPrices/Latest?readjson=false";
+const CLASSIC_GOLD_URL = "https://classic.goldtraders.or.th/";
 
 // ── Selector sets (primary first, fallback second) ──────────────────────
 const SELECTOR_SETS = [
@@ -59,6 +60,20 @@ function isValidPrice(value: number): boolean {
   return !isNaN(value) && value >= MIN_VALID_PRICE && value <= MAX_VALID_PRICE;
 }
 
+function formatThaiDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Delay helper for retries */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,14 +125,50 @@ function extractPrices($: cheerio.CheerioAPI): GoldPriceRaw {
 /**
  * Single scrape attempt — fetches the page and extracts prices.
  */
-async function scrapeOnce(): Promise<GoldPriceRaw> {
-  const { data: html } = await axios.get(GOLD_URL, {
-    headers: { "User-Agent": "Mozilla/5.0" },
+async function fetchLatestFromApi(): Promise<GoldPriceRaw> {
+  const { data } = await axios.get(GOLD_API_URL, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0",
+    },
+    timeout: 10_000,
+  });
+
+  const buy = Math.round(Number(data?.bL_BuyPrice));
+  const sell = Math.round(Number(data?.bL_SellPrice));
+
+  if (!isValidPrice(buy) || !isValidPrice(sell)) {
+    throw new Error("Gold API returned invalid prices");
+  }
+
+  return {
+    buy,
+    sell,
+    updatedAt: data?.asTime ? formatThaiDateTime(data.asTime) : new Date().toISOString(),
+  };
+}
+
+async function scrapeClassicPage(): Promise<GoldPriceRaw> {
+  const { data: html } = await axios.get(CLASSIC_GOLD_URL, {
+    headers: {
+      Accept: "text/html",
+      "User-Agent": "Mozilla/5.0",
+    },
     timeout: 10_000,
   });
 
   const $ = cheerio.load(html);
   return extractPrices($);
+}
+
+async function scrapeOnce(): Promise<GoldPriceRaw> {
+  try {
+    return await fetchLatestFromApi();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log("warn", `Gold API failed, falling back to classic page: ${message}`);
+    return scrapeClassicPage();
+  }
 }
 
 /**
