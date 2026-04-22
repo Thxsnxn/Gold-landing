@@ -12,7 +12,13 @@ export default function BannerSlider({
   interval = 3000,
 }: BannerSliderProps) {
   const [current, setCurrent] = useState(0);
+  const [activeBanners, setActiveBanners] = useState(banners);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    setActiveBanners(banners);
+    setCurrent(0);
+  }, [banners]);
 
   const goTo = useCallback(
     (index: number) => {
@@ -25,11 +31,11 @@ export default function BannerSlider({
   );
 
   useEffect(() => {
-    if (banners.length <= 1) return;
+    if (activeBanners.length <= 1) return;
 
     const timer = setInterval(() => {
       setCurrent((prev) => {
-        const next = (prev + 1) % banners.length;
+        const next = (prev + 1) % activeBanners.length;
         setIsTransitioning(true);
         setTimeout(() => setIsTransitioning(false), 800);
         return next;
@@ -37,9 +43,15 @@ export default function BannerSlider({
     }, interval);
 
     return () => clearInterval(timer);
-  }, [banners.length, interval]);
+  }, [activeBanners.length, interval]);
 
-  if (banners.length === 0) {
+  useEffect(() => {
+    if (current >= activeBanners.length) {
+      setCurrent(0);
+    }
+  }, [activeBanners.length, current]);
+
+  if (activeBanners.length === 0) {
     return (
       <div className="w-full h-full flex items-center justify-center">
         <div
@@ -63,7 +75,7 @@ export default function BannerSlider({
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
       {/* Images */}
-      {banners.map((src, i) => (
+      {activeBanners.map((src, i) => (
         <img
           key={src}
           src={src}
@@ -71,6 +83,9 @@ export default function BannerSlider({
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-800 ease-in-out ${i === current ? "opacity-100 banner-fade-in" : "opacity-0"
             }`}
           style={{ zIndex: i === current ? 1 : 0 }}
+          onError={() => {
+            setActiveBanners((items) => items.filter((item) => item !== src));
+          }}
         />
       ))}
 
@@ -84,12 +99,12 @@ export default function BannerSlider({
       />
 
       {/* Dot indicators */}
-      {banners.length > 1 && (
+      {activeBanners.length > 1 && (
         <div
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20"
           id="banner-dots"
         >
-          {banners.map((_, i) => (
+          {activeBanners.map((_, i) => (
             <button
               key={i}
               className={`dot-indicator ${i === current ? "active" : ""}`}

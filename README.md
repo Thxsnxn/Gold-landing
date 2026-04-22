@@ -34,8 +34,16 @@ The landing page uses these static files:
 - `public/uploads/banner1.png`
 - `public/uploads/banner2.png`
 - `public/uploads/banner3.png`
+- `public/uploads/banner4.png`
+- `public/uploads/banner5.png`
+- `public/uploads/banner6.png`
+- `public/uploads/banner7.png`
+- `public/uploads/banner8.png`
+- `public/uploads/banner9.png`
+- `public/uploads/banner10.png`
 
 Replace those files when the customer wants banner changes.
+Missing banner files are skipped automatically, so you can use fewer than 10 images.
 
 ## Deploy To Vercel
 

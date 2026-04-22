@@ -8,6 +8,13 @@ const STATIC_BANNERS = [
   "/uploads/banner1.png",
   "/uploads/banner2.png",
   "/uploads/banner3.png",
+  "/uploads/banner4.png",
+  "/uploads/banner5.png",
+  "/uploads/banner6.png",
+  "/uploads/banner7.png",
+  "/uploads/banner8.png",
+  "/uploads/banner9.png",
+  "/uploads/banner10.png",
 ];
 
 interface GoldData {
