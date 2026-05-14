@@ -17,6 +17,8 @@ const STATIC_BANNERS = [
   "/uploads/banner10.png",
 ];
 
+const GOLD_CACHE_KEY = "gold_price_cache";
+
 interface GoldData {
   buy: number;
   sell: number;
@@ -24,33 +26,70 @@ interface GoldData {
   updatedAt: string;
 }
 
+function loadCached(): GoldData | null {
+  try {
+    const raw = localStorage.getItem(GOLD_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GoldData;
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(data: GoldData): void {
+  try {
+    localStorage.setItem(GOLD_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    // ignore (private browsing / storage full)
+  }
+}
+
 export default function Home() {
   const [gold, setGold] = useState<GoldData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchGold = async () => {
+  const fetchGold = async (background = false) => {
+    if (background) setRefreshing(true);
     try {
       const res = await fetch("/api/gold");
       const data = await res.json();
 
       if (data.success) {
-        setGold(data);
+        const goldData: GoldData = {
+          buy: data.buy,
+          sell: data.sell,
+          ornament: data.ornament,
+          updatedAt: data.updatedAt,
+        };
+        setGold(goldData);
+        saveCache(goldData);
         setError(null);
       } else {
-        setError(data.error || "ไม่สามารถโหลดราคาทองได้");
+        if (!background) setError(data.error || "ไม่สามารถโหลดราคาทองได้");
       }
     } catch {
-      setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+      if (!background) setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
+      if (background) setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchGold();
+    const cached = loadCached();
+    if (cached) {
+      // แสดงข้อมูลเก่าก่อนทันที แล้ว fetch ใหม่ใน background
+      setGold(cached);
+      setLoading(false);
+      fetchGold(true);
+    } else {
+      // ไม่มี cache — โหลดปกติ
+      fetchGold(false);
+    }
 
-    const interval = setInterval(fetchGold, 60000);
+    const interval = setInterval(() => fetchGold(true), 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -70,7 +109,7 @@ export default function Home() {
             <div className="text-center grid gap-0">
               <h1
                 className="text-[#BD230D] leading-tight h-[100px]  lg:text-[clamp(90px,5vw,72px)]"
-                
+
               >
                 ราคาทองแท่งวันนี้
               </h1>
@@ -79,7 +118,9 @@ export default function Home() {
                 {gold ? (
                   <>
                     ข้อมูลล่าสุด {gold.updatedAt}
-                    
+                    {refreshing && (
+                      <RefreshCw size={14} className="animate-spin opacity-50" />
+                    )}
                   </>
                 ) : (
                   "กำลังโหลด..."
@@ -123,9 +164,9 @@ export default function Home() {
               {/* BUY */}
               <div className="flex-1 flex  justify-between  w-full items-center px-8  overflow-hidden">
                 <div className="flex items-center mx-10  h-[100px] justify-around text-center text-[clamp(13vh,4vw,56px)] font-medium" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                  
+
                   <div className="h-[120px] ">​​​รับซื้อ​​</div>
-                 
+
                 </div>
                 <div className="flex items-center h-[100px]  whitespace-nowrap overflow-hidden font-medium tabular-nums text-[clamp(21vh,6vw,80px)] [font-feature-settings:'tnum']">
                   {gold.buy.toLocaleString("th-TH")}
