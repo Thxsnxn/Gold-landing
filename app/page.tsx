@@ -94,27 +94,27 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex w-full h-screen bg-black" style={{ backgroundColor: 'black' }}>
+    <div className="flex w-full min-h-[100svh] lg:h-screen bg-black" style={{ backgroundColor: 'black' }}>
       {/* LEFT */}
       <div className="w-full lg:w-1/2 h-full flex flex-col overflow-hidden">
 
         {/* HEADER */}
-        <div className="bg-[#f5f2ed] w-fullflex items-center px-6 py-5 border-b-4 border-[#c40000]" style={{ backgroundColor: '#f5f2ed', borderBottomColor: '#c40000' }}>
+        <div className="bg-[#f5f2ed] w-full flex items-center px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5 border-b-4 border-[#c40000]" style={{ backgroundColor: '#f5f2ed', borderBottomColor: '#c40000' }}>
           <div className="flex justify-around w-full  items-center">
 
-            <div className="w-[95px] h-[95px] rounded-full  overflow-hidden shadow-md">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-[95px] lg:h-[95px] rounded-full overflow-hidden shadow-md shrink-0">
               <img src="/logo/logo1.jpg" className="w-full h-full object-cover" />
             </div>
 
-            <div className="text-center grid gap-0">
+            <div className="text-center grid gap-0 px-2">
               <h1
-                className="text-[#BD230D] leading-tight h-[100px]  lg:text-[clamp(90px,5vw,72px)]"
+                className="text-[#BD230D] leading-[0.9] h-auto text-[2.5rem] sm:text-[3rem] lg:text-[clamp(90px,5vw,72px)]"
 
               >
                 ราคาทองแท่งวันนี้
               </h1>
 
-              <p className="text-[#555] -mt-1 text-[clamp(30px,1.2vw,16px)] font-light flex items-center justify-center gap-2" style={{ color: '#555' }}>
+              <p className="text-[#555] mt-1 text-sm sm:text-base lg:-mt-1 lg:text-[clamp(30px,1.2vw,16px)] font-light flex items-center justify-center gap-2" style={{ color: '#555' }}>
                 {gold ? (
                   <>
                     ข้อมูลล่าสุด {gold.updatedAt}
@@ -128,7 +128,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="w-[95px] h-[95px] rounded-full overflow-hidden shadow-md">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-[95px] lg:h-[95px] rounded-full overflow-hidden shadow-md shrink-0">
               <img src="/logo/logo2.jpg" className="w-full h-full object-cover" />
             </div>
 
