@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { GoldPriceRaw } from "./types";
+import fallbackGold from "./fallbackGold.json";
 
 // ── Paths ───────────────────────────────────────────────────────────────
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -70,6 +71,11 @@ function initialize(): void {
       lastKnownGood = diskData;
       cache = diskData;
       log("info", "Initialized cache from persistent storage");
+    } else {
+      // No disk cache (e.g. on Vercel) — seed last-known-good from the
+      // bundled fallback so a failed scrape never returns a hard error.
+      lastKnownGood = fallbackGold as GoldPriceRaw;
+      log("info", "Initialized last-known-good from bundled fallback");
     }
   }
 }

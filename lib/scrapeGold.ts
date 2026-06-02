@@ -6,8 +6,10 @@ const GOLD_TRADERS_API_URL =
 
 const MIN_VALID_PRICE = 50_000;
 const MAX_VALID_PRICE = 100_000;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
+// Keep total time (retries × timeout + delays) under Vercel's function limit.
+const REQUEST_TIMEOUT_MS = 4_000;
 
 function log(level: "info" | "warn" | "error", message: string) {
   const ts = new Date().toISOString();
@@ -49,7 +51,7 @@ async function fetchLatestFromGoldTraders(): Promise<GoldPriceRaw> {
       Accept: "application/json",
       "User-Agent": "Mozilla/5.0",
     },
-    timeout: 10_000,
+    timeout: REQUEST_TIMEOUT_MS,
   });
 
   const buy = Math.round(Number(data?.bL_BuyPrice));
