@@ -10,4 +10,5 @@ export interface GoldApiResponse {
   sell: number;
   ornament: number;
   updatedAt: string;
+  stale?: boolean;
 }

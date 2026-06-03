@@ -2,6 +2,8 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import type { GoldPriceRaw } from "./types";
 
+const CLASSIC_HOME_URL = "https://classic.goldtraders.or.th/";
+const CLASSIC_DEFAULT_URL = "https://classic.goldtraders.or.th/default.aspx";
 const CLASSIC_DAILY_URL = "https://classic.goldtraders.or.th/DailyPrices.aspx";
 const CLASSIC_UPDATE_URL = "https://classic.goldtraders.or.th/UpdatePriceList.aspx";
 
@@ -44,17 +46,7 @@ function parseThaiPrice(value: string): number {
   return Math.round(Number(value.replace(/,/g, "")));
 }
 
-function parseDailyPricePage(html: string): GoldPriceRaw {
-  const text = normalizeText(html);
-  const priceMatch = text.match(
-    /ราคาทองตามประกาศของสมาคมค้าทองคำ\s*ประจำวันที่\s*([0-9/]+)[\s\S]*?ทองคำแท่ง 96\.5%\s*n\/a\s*([\d,]+\.\d+)\s*([\d,]+\.\d+)/
-  );
-
-  if (!priceMatch) {
-    throw new Error("classic.goldtraders.or.th daily page format changed");
-  }
-
-  const [, date, buyRaw, sellRaw] = priceMatch;
+function buildResult(buyRaw: string, sellRaw: string, updatedAt: string): GoldPriceRaw {
   const buy = parseThaiPrice(buyRaw);
   const sell = parseThaiPrice(sellRaw);
 
@@ -65,27 +57,57 @@ function parseDailyPricePage(html: string): GoldPriceRaw {
   return {
     buy,
     sell,
-    updatedAt: date,
+    updatedAt,
   };
+}
+
+function parseHomePage(html: string): GoldPriceRaw {
+  const text = normalizeText(html);
+  const match = text.match(
+    /ประจำวันที่\s*([0-9/]+)\s*เวลา\s*([0-9:.]+)\s*น\.\s*\(ครั้งที่\s*\d+\)\s*บาทละ\(บาท\)\s*ทองคำแท่ง 96\.5%\s*ขายออก\s*([\d,]+\.\d+)\s*รับซื้อ\s*([\d,]+\.\d+)/
+  );
+
+  if (!match) {
+    throw new Error("classic home page format changed");
+  }
+
+  const [, date, time, sellRaw, buyRaw] = match;
+  return buildResult(buyRaw, sellRaw, `${date} ${time}`);
+}
+
+function parseDailyPricePage(html: string): GoldPriceRaw {
+  const text = normalizeText(html);
+  const match = text.match(
+    /ราคาทองตามประกาศของสมาคมค้าทองคำ\s*ประจำวันที่\s*([0-9/]+)[\s\S]*?ทองคำแท่ง 96\.5%\s*n\/a\s*([\d,]+\.\d+)\s*([\d,]+\.\d+)/
+  );
+
+  if (!match) {
+    throw new Error("classic daily page format changed");
+  }
+
+  const [, date, buyRaw, sellRaw] = match;
+  return buildResult(buyRaw, sellRaw, date);
 }
 
 function parseUpdatePriceTime(html: string): string | null {
   const text = normalizeText(html);
-  const updateMatch = text.match(
+  const match = text.match(
     /([0-9]{2}\/[0-9]{2}\/[0-9]{4})\s+([0-9]{2}:[0-9]{2})\s+\d+\s+[\d,]+\.\d+\s+[\d,]+\.\d+/
   );
 
-  if (!updateMatch) {
+  if (!match) {
     return null;
   }
 
-  return `${updateMatch[1]} ${updateMatch[2]}`;
+  return `${match[1]} ${match[2]}`;
 }
 
 async function fetchHtml(url: string): Promise<string> {
   const { data } = await axios.get<string>(url, {
     headers: {
       Accept: "text/html,application/xhtml+xml",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
     },
@@ -96,7 +118,12 @@ async function fetchHtml(url: string): Promise<string> {
   return data;
 }
 
-async function scrapeOnce(): Promise<GoldPriceRaw> {
+async function tryParseCurrentPage(url: string): Promise<GoldPriceRaw> {
+  const html = await fetchHtml(url);
+  return parseHomePage(html);
+}
+
+async function tryParseDailyPage(): Promise<GoldPriceRaw> {
   const [dailyHtml, updateHtml] = await Promise.all([
     fetchHtml(CLASSIC_DAILY_URL),
     fetchHtml(CLASSIC_UPDATE_URL).catch((err) => {
@@ -113,6 +140,27 @@ async function scrapeOnce(): Promise<GoldPriceRaw> {
     ...dailyPrice,
     updatedAt: latestUpdate ?? dailyPrice.updatedAt,
   };
+}
+
+async function scrapeOnce(): Promise<GoldPriceRaw> {
+  const strategies: Array<() => Promise<GoldPriceRaw>> = [
+    () => tryParseCurrentPage(CLASSIC_HOME_URL),
+    () => tryParseCurrentPage(CLASSIC_DEFAULT_URL),
+    () => tryParseDailyPage(),
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const strategy of strategies) {
+    try {
+      return await strategy();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      log("warn", `Source strategy failed: ${lastError.message}`);
+    }
+  }
+
+  throw lastError ?? new Error("No scrape strategy succeeded");
 }
 
 export async function scrapeGoldPrice(): Promise<GoldPriceRaw> {

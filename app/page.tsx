@@ -24,6 +24,7 @@ interface GoldData {
   sell: number;
   ornament: number;
   updatedAt: string;
+  stale?: boolean;
 }
 
 function loadCached(): GoldData | null {
@@ -53,7 +54,7 @@ export default function Home() {
   const fetchGold = async (background = false) => {
     if (background) setRefreshing(true);
     try {
-      const res = await fetch("/api/gold");
+      const res = await fetch("/api/gold", { cache: "no-store" });
       const data = await res.json();
 
       if (data.success) {
@@ -62,6 +63,7 @@ export default function Home() {
           sell: data.sell,
           ornament: data.ornament,
           updatedAt: data.updatedAt,
+          stale: data.stale,
         };
         setGold(goldData);
         saveCache(goldData);
@@ -118,6 +120,11 @@ export default function Home() {
                 {gold ? (
                   <>
                     ข้อมูลล่าสุด {gold.updatedAt}
+                    {gold.stale && (
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                        ข้อมูลสำรอง
+                      </span>
+                    )}
                     {refreshing && (
                       <RefreshCw size={14} className="animate-spin opacity-50" />
                     )}
