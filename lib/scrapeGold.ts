@@ -2,6 +2,13 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import type { GoldPriceRaw } from "./types";
 
+// Primary source: thaigold.info real-time feed. It mirrors the สมาคมค้าทองคำ
+// price and — unlike goldtraders/classic.goldtraders — is reachable from
+// datacenter IPs (Vercel), which the others block with a 403.
+const THAIGOLD_FEED_URL = "https://www.thaigold.info/RealTimeDataV2/gtdata_.txt";
+
+// Fallback sources (Cloudflare-blocked from many datacenter IPs, but kept in
+// case thaigold.info is ever unavailable).
 const CLASSIC_HOME_URL = "https://classic.goldtraders.or.th/";
 const CLASSIC_DEFAULT_URL = "https://classic.goldtraders.or.th/default.aspx";
 const CLASSIC_DAILY_URL = "https://classic.goldtraders.or.th/DailyPrices.aspx";
@@ -142,8 +149,68 @@ async function tryParseDailyPage(): Promise<GoldPriceRaw> {
   };
 }
 
+interface ThaiGoldEntry {
+  name: string;
+  bid: string | number;
+  ask: string | number;
+  diff: string | number;
+}
+
+function formatThaiTimestamp(ms: number): string {
+  return new Date(ms).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Primary strategy: thaigold.info real-time feed.
+async function fetchFromThaiGold(): Promise<GoldPriceRaw> {
+  const { data } = await axios.get(THAIGOLD_FEED_URL, {
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "User-Agent": "Mozilla/5.0",
+    },
+    timeout: REQUEST_TIMEOUT_MS,
+  });
+
+  // The feed is served as text/plain; axios may or may not auto-parse it.
+  const entries: ThaiGoldEntry[] =
+    typeof data === "string" ? JSON.parse(data) : data;
+
+  if (!Array.isArray(entries)) {
+    throw new Error("thaigold.info returned an unexpected payload");
+  }
+
+  // "สมาคมฯ" = ราคาทองแท่งสมาคมค้าทองคำ (bid = รับซื้อ, ask = ขายออก)
+  const assoc = entries.find((e) => e.name === "สมาคมฯ");
+  if (!assoc) {
+    throw new Error("thaigold.info: สมาคมฯ entry not found");
+  }
+
+  const buy = Math.round(Number(assoc.bid));
+  const sell = Math.round(Number(assoc.ask));
+
+  if (!isValidPrice(buy) || !isValidPrice(sell)) {
+    throw new Error("thaigold.info returned invalid prices");
+  }
+
+  // "Update".bid is a unix timestamp (seconds) of the last feed update.
+  const update = entries.find((e) => e.name === "Update");
+  const unixSeconds = update ? Number(update.bid) : NaN;
+  const updatedAt = Number.isFinite(unixSeconds)
+    ? formatThaiTimestamp(unixSeconds * 1000)
+    : new Date().toISOString();
+
+  return { buy, sell, updatedAt };
+}
+
 async function scrapeOnce(): Promise<GoldPriceRaw> {
   const strategies: Array<() => Promise<GoldPriceRaw>> = [
+    () => fetchFromThaiGold(),
     () => tryParseCurrentPage(CLASSIC_HOME_URL),
     () => tryParseCurrentPage(CLASSIC_DEFAULT_URL),
     () => tryParseDailyPage(),
