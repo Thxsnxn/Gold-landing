@@ -9,7 +9,8 @@ const MAX_VALID_PRICE = 100_000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 // Keep total time (retries × timeout + delays) under Vercel's function limit.
-const REQUEST_TIMEOUT_MS = 4_000;
+// Default region is overseas, so allow a bit more time per request.
+const REQUEST_TIMEOUT_MS = 6_000;
 
 function log(level: "info" | "warn" | "error", message: string) {
   const ts = new Date().toISOString();
